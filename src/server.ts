@@ -1,125 +1,92 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer as Server } from '@modelcontextprotocol/sdk/server/mcp.js'; // Use McpServer, alias as Server for less code change
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  CallToolRequestSchema,
   CallToolResult,
   ErrorCode,
-  ListToolsRequestSchema,
   McpError,
-  Tool,
+  // ListToolsRequestSchema, // No longer needed directly
+  // CallToolRequestSchema, // No longer needed directly
 } from '@modelcontextprotocol/sdk/types.js';
-// import { z } from 'zod'; // Removed unused import
+// Removed unused 'z' import
 
 import { determineNextStep } from './logic.js';
-import { OccamsRazorThinkingParamsSchema, ErrorResponse } from './types.js'; // Import Zod schema and response types (Removed unused OccamsRazorThinkingResponse)
-
-// --- Tool Definition ---
-
-// Extract the shape for properties to avoid redundancy
-// const occamsRazorInputSchemaShape = OccamsRazorThinkingParamsSchema.shape; // Removed unused variable
-
-const OCCAMS_RAZOR_TOOL: Tool = {
-  name: 'occams_razor_thinking',
-  description: "Guides systematic problem-solving for coding tasks using Occam's Razor. Breaks down problems into sequential steps (Context, Outcome, Explore, Evaluate, Implement) prioritizing simplicity. Call this tool sequentially, providing your 'thought' (reasoning/output) for the current step.",
-  inputSchema: {
-    type: 'object',
-    properties: {
-        // Map Zod schema properties to JSON schema properties
-        thought: { type: "string", description: "Detailed thinking/analysis for the current stage." },
-        thought_number: { type: "integer", description: "Sequential number of the thought (starts at 1)." },
-        thinking_stage: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation", "reporting_issue"], description: "The current stage." },
-        next_thought_needed: { type: "boolean", description: "`true` to continue, `false` to terminate." },
-        user_request: { type: "string", description: "The original user request (required on first call)." },
-        needs_clarification: { type: "boolean", description: "Set to `true` if user input is needed." },
-        clarification_questions: { type: "array", items: { type: "string" }, description: "Questions for the user if `needs_clarification` is true." },
-        user_clarification: { type: "string", description: "User's response to previous clarification request." },
-        requested_stage_override: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation"], description: "Target stage for loopback." },
-        issue_description: { type: "string", description: "Summary if task is blocked/infeasible." }
-    },
-    // Extract required fields from Zod schema if possible, or list manually
-    // Zod doesn't directly expose a simple list of required keys easily, list known required ones
-    required: ["thought", "thought_number", "thinking_stage", "next_thought_needed"]
-  },
-};
+import {
+  OccamsRazorThinkingParamsSchema, // Keep Zod schema for validation within the handler
+  ErrorResponse,
+  // OccamsRazorThinkingResponse, // Removed unused import
+  OccamsRazorThinkingParams, // Keep the TS type for casting if needed
+} from './types.js';
 
 // --- Server Setup ---
 
 const server = new Server({
   name: 'occams-razor-mcp',
-  version: process.env.npm_package_version || '0.1.7', // Read from package.json
-  // Capabilities are defined implicitly via setRequestHandler
+  version: process.env.npm_package_version || '0.1.8', // Read from package.json
+  // Capabilities are now defined implicitly via server.tool()
 });
 
-// --- Request Handlers ---
+// --- Tool Definition and Handler using server.tool() ---
 
-// Handler for listing tools
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [OCCAMS_RAZOR_TOOL], // Return the defined tool
-}));
+server.tool(
+  'occams_razor_thinking', // 1. Tool name (string)
+  "Guides systematic problem-solving for coding tasks using Occam's Razor.", // 2. Description (string)
+  OccamsRazorThinkingParamsSchema.shape, // 3. ZodRawShape (the object inside z.object())
+  async (params): Promise<CallToolResult> => { // 4. Handler (receives validated params matching the shape)
+    // Cast params to the specific TypeScript type if needed for stricter checking within the handler
+    const typedParams = params as OccamsRazorThinkingParams;
+    try {
+      // Call the existing logic function
+      const logicResponse = await determineNextStep(typedParams); // Pass potentially casted params
 
-// Handler for calling the tool
-server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
-  if (request.params.name === OCCAMS_RAZOR_TOOL.name) {
-    // Validate arguments using the Zod schema from types.ts
-    const parseResult = OccamsRazorThinkingParamsSchema.safeParse(request.params.arguments);
-    if (!parseResult.success) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        `Invalid arguments for tool ${OCCAMS_RAZOR_TOOL.name}: ${parseResult.error.message}`
-      );
-    }
-
-    // Call the existing logic function
-    const logicResponse = await determineNextStep(parseResult.data);
-
-    // Adapt the response from determineNextStep to CallToolResult format
-    if (logicResponse.status === 'ERROR') {
-        const errorResp = logicResponse as ErrorResponse;
-        return {
-            isError: true,
-            content: [{ type: 'text', text: `Error: ${errorResp.message}${errorResp.details ? ` Details: ${JSON.stringify(errorResp.details)}` : ''}` }],
-        };
-    } else if (logicResponse.status === 'NEXT_THOUGHT' || logicResponse.status === 'LOOPBACK_ACCEPTED') {
-        // These statuses have next_stage and prompt
-        return {
-            isError: false,
-            content: [{ type: 'text', text: `Status: ${logicResponse.status}, Next Stage: ${logicResponse.next_stage}\nPrompt: ${logicResponse.prompt}` }],
-        };
-    } else if (logicResponse.status === 'CLARIFICATION_NEEDED') {
-        // This status has clarification_questions
-        return {
-            isError: false, // Technically not an error, but requires user action
-            content: [{ type: 'text', text: `Status: ${logicResponse.status}\nQuestions:\n- ${logicResponse.clarification_questions.join('\n- ')}` }],
-        };
-    } else if (logicResponse.status === 'COMPLETED' || logicResponse.status === 'BLOCKED') {
-        // These statuses indicate the end of the process
-        return {
-            isError: false,
-            content: [{ type: 'text', text: `Status: ${logicResponse.status}. Process finished.` }],
-            // Optionally include final thought or issue description if available and desired
-        };
-    } else {
-        // This block should be unreachable if logicResponse matches the union type.
-        // Treat reaching here as an internal server error.
-        console.error(`[occams-razor-mcp] Unexpected response status from logic: ${JSON.stringify(logicResponse)}`);
-        return {
-            isError: true,
-            content: [{ type: 'text', text: `Internal Server Error: Unexpected response state.` }],
-        };
+      // Adapt the response from determineNextStep to CallToolResult format
+      if (logicResponse.status === 'ERROR') {
+          const errorResp = logicResponse as ErrorResponse;
+          return {
+              isError: true,
+              content: [{ type: 'text', text: `Error: ${errorResp.message}${errorResp.details ? ` Details: ${JSON.stringify(errorResp.details)}` : ''}` }],
+          };
+      } else if (logicResponse.status === 'NEXT_THOUGHT' || logicResponse.status === 'LOOPBACK_ACCEPTED') {
+          return {
+              isError: false,
+              content: [{ type: 'text', text: `Status: ${logicResponse.status}, Next Stage: ${logicResponse.next_stage}\nPrompt: ${logicResponse.prompt}` }],
+          };
+      } else if (logicResponse.status === 'CLARIFICATION_NEEDED') {
+          return {
+              isError: false, // Requires user action, but not a server error
+              content: [{ type: 'text', text: `Status: ${logicResponse.status}\nQuestions:\n- ${logicResponse.clarification_questions.join('\n- ')}` }],
+          };
+      } else if (logicResponse.status === 'COMPLETED' || logicResponse.status === 'BLOCKED') {
+          return {
+              isError: false,
+              content: [{ type: 'text', text: `Status: ${logicResponse.status}. Process finished.` }],
+          };
+      } else {
+          // Fallback for any unexpected status from logic
+          console.error(`[occams-razor-mcp] Unexpected response status from logic: ${JSON.stringify(logicResponse)}`);
+          return {
+              isError: true,
+              content: [{ type: 'text', text: `Internal Server Error: Unexpected response state.` }],
+          };
+      }
+    } catch (error: any) {
+        // Catch errors from determineNextStep or response adaptation
+        console.error(`[occams-razor-mcp] Error during tool execution: ${error.message}`, error.stack);
+        throw new McpError(
+            ErrorCode.InternalError,
+            `Error executing tool occams_razor_thinking: ${error.message}`
+        );
     }
   }
-  // If tool name doesn't match
-  throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
-});
+);
 
 // --- Main Execution ---
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("[occams-razor-mcp] Server running on stdio");
+  console.error("[occams-razor-mcp] Server running on stdio, using SDK.");
   // Keep alive indefinitely until SIGINT/SIGTERM
   await new Promise(() => {});
 }
