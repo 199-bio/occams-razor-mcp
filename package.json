@@ -1,0 +1,43 @@
+{
+  "name": "@199bio/occams-razor-mcp",
+  "version": "0.1.0",
+  "description": "MCP Server implementing the Occam's Razor Thinking Tool for guided LLM reasoning.",
+  "main": "./dist/server.js",
+  "type": "module",
+  "bin": {
+    "occams-razor-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "build": "tsc",
+    "start": "node ./dist/server.js",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "mcp",
+    "llm",
+    "reasoning",
+    "occams-razor",
+    "ai",
+    "language-model"
+  ],
+  "author": "Boris Djordjevic (via AI Assistant)",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ],
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.14.0",
+    "eslint": "^9.24.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "jest": "^29.7.0",
+    "prettier": "^3.5.3",
+    "ts-jest": "^29.3.1",
+    "typescript": "^5.8.2"
+  }
+}

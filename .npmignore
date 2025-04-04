@@ -1,0 +1,27 @@
+# Build artifacts (except dist)
+*.tsbuildinfo
+
+# Source and tests
+src/
+tests/
+
+# Config files
+.DS_Store
+.eslintrc.js
+.prettierrc.js
+jest.config.cjs
+tsconfig.json
+.env*
+
+# Node modules
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db

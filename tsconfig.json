@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2020",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* Module settings for Node.js ESM */
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext", // Aligns with "type": "module" in package.json
+
+    /* Emit settings for building with tsc */
+    "noEmit": false, // We need tsc to emit JS files for the build
+    "outDir": "./dist", // Output directory for compiled JS
+    "rootDir": "./src", // Root directory of source files
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Paths */
+    "baseUrl": ".", // Optional: Set a base directory for path aliases
+    "paths": {} // Optional: Configure path aliases
+  },
+  "include": ["src/**/*"], // Adjust if your source code is elsewhere
+  "exclude": ["node_modules", "dist"] // Adjust as needed
+}
