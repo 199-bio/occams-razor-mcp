@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'; // Use base Server class
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'; // Ensure base Server class
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
@@ -9,8 +9,8 @@ import {
   ListToolsRequestSchema,
   McpError,
   Tool,
-  CallToolRequest, // Import the type for the request parameter
-} from '@modelcontextprotocol/sdk/types.js';
+  CallToolRequest,
+} from '@modelcontextprotocol/sdk/types.js'; // Ensure JsonSchema is not imported
 
 import { determineNextStep } from './logic.js';
 import {
@@ -24,7 +24,7 @@ import {
 // --- Tool Definition with Descriptions ---
 
 // Manually construct the JSON Schema including descriptions
-const occamsRazorJsonSchema = { // Remove non-existent JsonSchema type annotation
+const occamsRazorJsonSchema = { // Ensure no JsonSchema type annotation
     type: "object",
     properties: {
         thought: { type: "string", description: "Detailed thinking/analysis for the current stage." },
