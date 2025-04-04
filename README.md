@@ -1,90 +1,113 @@
 # Occam's Razor Thinking Tool - MCP Server
 
-**Version:** 0.1.0 (Initial Implementation)
+An MCP (Model Context Protocol) server providing a structured thinking tool for LLMs.
 
-This project implements the **Occam's Razor Thinking Tool** as a stateless MCP (Model Context Protocol) server, designed to be run easily via `npx`.
+## Overview
 
-Based on the specifications in `PRD.md` and `README.md` (in the parent directory), this tool guides Large Language Models (LLMs) through a structured, sequential thinking process for coding tasks:
+This server exposes a single tool, `occams_razor_thinking`, designed to guide Large Language Models (LLMs) through a systematic, step-by-step process for tackling constructive coding tasks (e.g., adding features, implementing algorithms) within MCP clients (e.g., Cline, Claude Desktop, Cursor).
 
-1.  **Context Analysis:** Understand the project environment.
-2.  **Outcome Definition:** Define the minimal viable goal.
-3.  **Solution Exploration:** Generate multiple potential approaches.
-4.  **Simplicity Evaluation:** Apply Occam's Razor to choose the simplest effective solution.
-5.  **Implementation:** Execute the chosen plan, focusing on simplicity.
+## Problem Solved
 
-The goal is to promote simpler, more maintainable, and better-aligned code generation from LLMs.
+Large Language Models (LLMs), despite their advanced capabilities, can generate overly complex or suboptimal solutions for coding tasks, often neglecting simpler, more maintainable alternatives. They might also rush into implementation without fully analyzing the project context or defining the precise goal. This can lead to code that is difficult to maintain, doesn't fit the existing architecture, or doesn't solve the actual user need.
 
-## Features
+## Solution: The `occams_razor_thinking` Tool
 
-*   Implements the `occams_razor_thinking` MCP tool.
-*   Stateless server design.
-*   Handles sequential stage progression.
-*   Supports user clarification requests.
-*   Supports loopbacks to earlier stages (e.g., re-exploring solutions after evaluation).
-*   Handles successful completion and blocked/infeasible task states.
-*   Designed for execution via `npx`.
+This server provides the `occams_razor_thinking` tool, which enforces a structured cognitive workflow inspired by effective problem-solving methodologies and the principle of Occam's Razor (prioritizing simplicity). It guides the LLM through distinct stages before implementation:
 
-## Usage (via NPX)
+1.  **Context Analysis:** Analyze the existing project context (code structure, patterns, constraints).
+2.  **Outcome Definition:** Clearly define the minimal viable outcome required.
+3.  **Solution Exploration:** Generate multiple potential solutions, prioritizing simplicity and reuse.
+4.  **Simplicity Evaluation:** Critically evaluate solutions based on simplicity and effectiveness.
+5.  **Implementation:** Implement only the chosen simplest effective solution.
 
-Once published to NPM under a chosen package name (e.g., `@your-npm-username/occams-razor-mcp`), you can run the server directly using `npx`:
+This structured approach aims to improve the quality, simplicity, maintainability, and contextual relevance of LLM-generated code. The tool also includes mechanisms for handling user clarification and looping back if initial solutions are inadequate.
 
-```bash
-npx <your-package-name>
+## Tool: `occams_razor_thinking`
+
+**Description:** Guides systematic problem-solving for coding tasks using Occam's Razor. Breaks down problems into sequential steps (Context, Outcome, Explore, Evaluate, Implement) prioritizing simplicity. Call this tool sequentially, providing your 'thought' (reasoning/output) for the current step.
+
+**Input Parameters:** (Refer to `src/types.ts` or PRD for full details)
+
+*   `thought` (string, required): Detailed thinking/analysis for the current stage.
+*   `thought_number` (integer, required): Sequential number of the thought (starts at 1).
+*   `thinking_stage` (enum, required): The current stage (`context_analysis`, `outcome_definition`, etc.).
+*   `next_thought_needed` (boolean, required): `true` to continue, `false` to terminate.
+*   `user_request` (string, required on first call): The original user request.
+*   `needs_clarification` (boolean, optional): Set to `true` if user input is needed.
+*   `clarification_questions` (array, optional): Questions for the user if `needs_clarification` is true.
+*   `user_clarification` (string, optional): User's response to previous clarification request.
+*   `requested_stage_override` (enum, optional): Target stage for loopback (e.g., `solution_exploration`).
+*   `issue_description` (string, optional): Summary if task is blocked/infeasible.
+
+## Use Cases
+
+*   **Feature Implementation:** Guiding an LLM to add a new feature, ensuring it considers context and chooses a simple approach.
+    *   *Example Prompt:* "Using the Occam's Razor tool, add a dark mode toggle button to the application header."
+*   **Algorithm Implementation:** Implementing a specific function or algorithm while prioritizing clarity and efficiency.
+    *   *Example Prompt:* "Follow the Occam's Razor process to implement a function that finds the median value in a list of numbers."
+*   **Structured Code Generation:** Ensuring generated code snippets or components fit well within an existing project structure.
+    *   *Example Prompt:* "Analyze the context, define the outcome, explore, evaluate, and then implement a simple React component for displaying user profiles, using the Occam's Razor tool."
+
+## Installation & Setup
+
+This server requires Node.js (version 16 or higher recommended). It is published on NPM and designed to be run via `npx`.
+
+**Step 1: Configure Your MCP Client**
+
+Add the following JSON block within the `"mcpServers": {}` object in your client's configuration file. Choose the file corresponding to your client and operating system:
+
+**Configuration Block:**
+
+```json
+    "occams-razor": {
+      "command": "npx",
+      "args": ["--package", "@199bio/occams-razor-mcp", "occams-razor-mcp"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
 ```
 
-The server will start and listen for MCP requests on standard input (stdin) and send responses to standard output (stdout). Integrate this with your MCP client application (e.g., IDE plugin, chat interface).
+*(Note: The `args` array uses the more explicit `npx --package <package_name> <command_name>` format which might be more reliable in some environments).*
 
-*(Replace `<your-package-name>` with the actual name used for publishing).*
+**Client Configuration File Locations:**
 
-## Development Setup
+*   **Claude Desktop:**
+    *   macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+    *   Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+    *   Linux: `~/.config/Claude/claude_desktop_config.json` (Path may vary)
+*   **VS Code Extension (Cline / "Claude Code"):**
+    *   macOS: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+    *   Windows: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+    *   Linux: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+*   **Cursor:**
+    *   Global: `~/.cursor/mcp.json`
+    *   Project: `.cursor/mcp.json` within your project folder.
+*   **Windsurf:**
+    *   `~/.codeium/windsurf/mcp_config.json`
+*   **Other Clients:**
+    *   Consult the specific client's documentation. The JSON structure above should generally work.
 
-1.  **Clone the repository (if applicable):**
-    ```bash
-    # git clone <repository-url>
-    # cd occams-razor-mcp-server
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Build the project (compile TypeScript):**
-    ```bash
-    npm run build
-    ```
-4.  **Run the server locally (using compiled code):**
-    ```bash
-    npm start
-    ```
-    Alternatively, run directly using `ts-node` or similar for development:
-    ```bash
-    # npm install -g ts-node (if not installed)
-    # ts-node src/server.ts
-    ```
-5.  **Run tests:**
-    ```bash
-    npm test
-    ```
-6.  **Lint and Format:**
-    ```bash
-    npm run lint
-    npm run format
-    ```
+**Step 2: Restart Client**
 
-## Project Structure
+After adding the configuration block and saving the file, fully restart your MCP client application. The first time the client starts the server, `npx` will automatically download the `@199bio/occams-razor-mcp` package if needed.
 
-*   `src/`: TypeScript source code.
-    *   `server.ts`: Main server entry point, handles MCP communication.
-    *   `logic.ts`: Core state machine logic for the tool.
-    *   `prompts.ts`: Guidance prompts for each thinking stage.
-    *   `types.ts`: TypeScript interfaces and enums.
-*   `dist/`: Compiled JavaScript output (after running `npm run build`).
-*   `tests/`: Jest test files.
-*   `package.json`: Project metadata, dependencies, and scripts.
-*   `tsconfig.json`: TypeScript compiler configuration.
-*   `jest.config.cjs`: Jest test runner configuration.
-*   `.eslintrc.js`: ESLint configuration.
-*   `.prettierrc.js`: Prettier configuration.
+## Usage Example
+
+Once installed and enabled, you can instruct your MCP client:
+
+"Use the Occam's Razor tool to add a basic health check endpoint at `/health` that returns a 200 OK status."
+
+The client's AI model should recognize the intent and initiate the multi-step process by calling the `occams_razor_thinking` tool, starting with the `context_analysis` stage.
+
+## Developed By
+
+This tool was developed as part of the initiatives at 199 Longevity, a group focused on extending the frontiers of human health and longevity.
+
+Learn more about our work in biotechnology at [199.bio](https://199.bio).
+
+Project contributor: Boris Djordjevic
 
 ## License
 
-MIT License (See `package.json` or original project `README.md`)
+This project is licensed under the MIT License - see the `package.json` file for details.
