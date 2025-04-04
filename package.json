@@ -1,11 +1,11 @@
 {
-  "name": "@199bio/occams-razor-mcp",
-  "version": "0.1.0",
+  "name": "occams-razor-mcp",
+  "version": "0.1.4",
   "description": "MCP Server implementing the Occam's Razor Thinking Tool for guided LLM reasoning.",
   "main": "./dist/server.js",
   "type": "module",
   "bin": {
-    "occams-razor-mcp": "./dist/server.js"
+    "occams-razor-mcp": "dist/server.js"
   },
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
@@ -39,5 +39,8 @@
     "prettier": "^3.5.3",
     "ts-jest": "^29.3.1",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "openai": "^4.91.1"
   }
 }

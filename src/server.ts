@@ -63,41 +63,45 @@ const rl = readline.createInterface({
 });
 
 rl.on('line', async (line) => {
+  let request: any;
   try {
-    const request = JSON.parse(line);
+    // Attempt to parse the line as JSON
+    request = JSON.parse(line);
 
-    // Basic request validation
-    if (!request.tool_name || !request.arguments) {
-      throw new Error('Invalid MCP request format.');
-    }
-
-    let response: OccamsRazorThinkingResponse | ErrorResponse;
-
-    // Route to the correct tool handler
-    if (request.tool_name === 'occams_razor_thinking') {
-      // Further validation specific to the tool's params could go here
-      if (typeof request.arguments !== 'object' || request.arguments === null) {
-         throw new Error('Invalid arguments format for occams_razor_thinking.');
+    // Check if it looks like our specific tool request *before* validation
+    if (
+      request &&
+      typeof request === 'object' &&
+      request.tool_name === 'occams_razor_thinking' &&
+      request.arguments &&
+      typeof request.arguments === 'object'
+    ) {
+      // Only process if it matches the expected tool request structure
+      let response: OccamsRazorThinkingResponse | ErrorResponse;
+      try {
+        // Now call the handler which contains the Zod validation via determineNextStep
+        response = await handleOccamsRazorThinking(request.arguments as OccamsRazorThinkingParams);
+        process.stdout.write(JSON.stringify(response) + '\n');
+      } catch (handlerError: any) {
+        // Handle errors specifically from the handler/validation
+        const errorResponse: ErrorResponse = {
+          status: 'ERROR',
+          message: `Error processing tool request: ${handlerError.message || 'Unknown handler error.'}`,
+          details: handlerError.stack,
+        };
+        process.stdout.write(JSON.stringify(errorResponse) + '\n');
       }
-      response = await handleOccamsRazorThinking(request.arguments as OccamsRazorThinkingParams);
     } else {
-      response = {
-        status: 'ERROR',
-        message: `Unknown tool name: ${request.tool_name}`,
-      };
+      // It's valid JSON, but not the request we're looking for (e.g., handshake, notification)
+      // Log for debugging if needed, but don't send an error response back
+      // console.error(`Ignoring non-tool request or unknown message format: ${line.substring(0, 100)}...`);
     }
-
-    // Send response back to stdout
-    process.stdout.write(JSON.stringify(response) + '\n');
-
-  } catch (error: any) {
-    // Handle parsing errors or other unexpected errors
-    const errorResponse: ErrorResponse = {
-      status: 'ERROR',
-      message: error.message || 'An unexpected error occurred.',
-      details: error.stack, // Include stack trace for debugging
-    };
-    process.stdout.write(JSON.stringify(errorResponse) + '\n');
+  } catch (parseError: any) {
+    // Handle JSON parsing errors specifically
+    if (line.trim() !== '') { // Ignore empty lines
+       // Don't send an error response for invalid JSON, as it might be partial data or noise
+       // console.error(`Failed to parse incoming line as JSON: ${parseError.message}. Line: ${line.substring(0, 100)}...`);
+    }
   }
 });
 
