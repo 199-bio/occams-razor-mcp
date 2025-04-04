@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2025-05-04
+
+### Changed
+
+-   Refactored server implementation to use `@modelcontextprotocol/sdk`'s base `Server` class and `setRequestHandler` for MCP compliance.
+
+### Fixed
+
+-   Resolved multiple connection issues experienced with IDE clients (VS Code, Cursor) by ensuring correct MCP handshake and request handling via SDK usage.
+-   Corrected type errors and SDK usage patterns.
+-   Ensured tool parameter descriptions are correctly included in the `tools/list` response.
+
+## [0.1.9] - 2025-05-04 [YANKED]
+
+### Changed
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [0.1.9] - 2025-05-04
 
 ### Changed
