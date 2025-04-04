@@ -1,172 +1,143 @@
 #!/usr/bin/env node
 
-import * as readline from 'readline';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  OccamsRazorThinkingParams,
-  OccamsRazorThinkingResponse,
-  ErrorResponse,
-} from './types.js'; // Add .js extension
+  CallToolRequestSchema,
+  CallToolResult,
+  ErrorCode,
+  ListToolsRequestSchema,
+  McpError,
+  Tool,
+} from '@modelcontextprotocol/sdk/types.js';
+// import { z } from 'zod'; // Removed unused import
 
-import { determineNextStep } from './logic.js'; // Import the actual logic
+import { determineNextStep } from './logic.js';
+import { OccamsRazorThinkingParamsSchema, ErrorResponse } from './types.js'; // Import Zod schema and response types (Removed unused OccamsRazorThinkingResponse)
 
-// Replace placeholder with call to actual logic
-async function handleOccamsRazorThinking(
-  params: OccamsRazorThinkingParams
-): Promise<OccamsRazorThinkingResponse | ErrorResponse> {
-  // Basic validation could remain here, or be solely within determineNextStep
-  // Let's rely on determineNextStep for core validation now
-  return determineNextStep(params);
+// --- Tool Definition ---
 
-  /* Placeholder logic removed:
-  console.error('handleOccamsRazorThinking logic not yet implemented.');
+// Extract the shape for properties to avoid redundancy
+// const occamsRazorInputSchemaShape = OccamsRazorThinkingParamsSchema.shape; // Removed unused variable
 
-  // Basic validation example (more robust validation needed)
-  if (params.thought_number === 1 && !params.user_request) {
-    return {
-      status: 'ERROR',
-      message: "Missing required parameter 'user_request' for the first thought.",
-    };
+const OCCAMS_RAZOR_TOOL: Tool = {
+  name: 'occams_razor_thinking',
+  description: "Guides systematic problem-solving for coding tasks using Occam's Razor. Breaks down problems into sequential steps (Context, Outcome, Explore, Evaluate, Implement) prioritizing simplicity. Call this tool sequentially, providing your 'thought' (reasoning/output) for the current step.",
+  inputSchema: {
+    type: 'object',
+    properties: {
+        // Map Zod schema properties to JSON schema properties
+        thought: { type: "string", description: "Detailed thinking/analysis for the current stage." },
+        thought_number: { type: "integer", description: "Sequential number of the thought (starts at 1)." },
+        thinking_stage: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation", "reporting_issue"], description: "The current stage." },
+        next_thought_needed: { type: "boolean", description: "`true` to continue, `false` to terminate." },
+        user_request: { type: "string", description: "The original user request (required on first call)." },
+        needs_clarification: { type: "boolean", description: "Set to `true` if user input is needed." },
+        clarification_questions: { type: "array", items: { type: "string" }, description: "Questions for the user if `needs_clarification` is true." },
+        user_clarification: { type: "string", description: "User's response to previous clarification request." },
+        requested_stage_override: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation"], description: "Target stage for loopback." },
+        issue_description: { type: "string", description: "Summary if task is blocked/infeasible." }
+    },
+    // Extract required fields from Zod schema if possible, or list manually
+    // Zod doesn't directly expose a simple list of required keys easily, list known required ones
+    required: ["thought", "thought_number", "thinking_stage", "next_thought_needed"]
+  },
+};
+
+// --- Server Setup ---
+
+const server = new Server({
+  name: 'occams-razor-mcp',
+  version: process.env.npm_package_version || '0.1.7', // Read from package.json
+  // Capabilities are defined implicitly via setRequestHandler
+});
+
+// --- Request Handlers ---
+
+// Handler for listing tools
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [OCCAMS_RAZOR_TOOL], // Return the defined tool
+}));
+
+// Handler for calling the tool
+server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+  if (request.params.name === OCCAMS_RAZOR_TOOL.name) {
+    // Validate arguments using the Zod schema from types.ts
+    const parseResult = OccamsRazorThinkingParamsSchema.safeParse(request.params.arguments);
+    if (!parseResult.success) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid arguments for tool ${OCCAMS_RAZOR_TOOL.name}: ${parseResult.error.message}`
+      );
+    }
+
+    // Call the existing logic function
+    const logicResponse = await determineNextStep(parseResult.data);
+
+    // Adapt the response from determineNextStep to CallToolResult format
+    if (logicResponse.status === 'ERROR') {
+        const errorResp = logicResponse as ErrorResponse;
+        return {
+            isError: true,
+            content: [{ type: 'text', text: `Error: ${errorResp.message}${errorResp.details ? ` Details: ${JSON.stringify(errorResp.details)}` : ''}` }],
+        };
+    } else if (logicResponse.status === 'NEXT_THOUGHT' || logicResponse.status === 'LOOPBACK_ACCEPTED') {
+        // These statuses have next_stage and prompt
+        return {
+            isError: false,
+            content: [{ type: 'text', text: `Status: ${logicResponse.status}, Next Stage: ${logicResponse.next_stage}\nPrompt: ${logicResponse.prompt}` }],
+        };
+    } else if (logicResponse.status === 'CLARIFICATION_NEEDED') {
+        // This status has clarification_questions
+        return {
+            isError: false, // Technically not an error, but requires user action
+            content: [{ type: 'text', text: `Status: ${logicResponse.status}\nQuestions:\n- ${logicResponse.clarification_questions.join('\n- ')}` }],
+        };
+    } else if (logicResponse.status === 'COMPLETED' || logicResponse.status === 'BLOCKED') {
+        // These statuses indicate the end of the process
+        return {
+            isError: false,
+            content: [{ type: 'text', text: `Status: ${logicResponse.status}. Process finished.` }],
+            // Optionally include final thought or issue description if available and desired
+        };
+    } else {
+        // This block should be unreachable if logicResponse matches the union type.
+        // Treat reaching here as an internal server error.
+        console.error(`[occams-razor-mcp] Unexpected response status from logic: ${JSON.stringify(logicResponse)}`);
+        return {
+            isError: true,
+            content: [{ type: 'text', text: `Internal Server Error: Unexpected response state.` }],
+        };
+    }
   }
+  // If tool name doesn't match
+  throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
+});
 
-  // Placeholder response - replace with actual logic
-  return {
-    status: 'ERROR',
-    message: 'Tool logic not implemented.',
-    details: params, // Echo params for debugging during development
-  };
-  */
-  // TODO: Implement the core logic based on PRD sections 5.2 - 5.6
-  console.error('handleOccamsRazorThinking logic not yet implemented.');
+// --- Main Execution ---
 
-  // Basic validation example (more robust validation needed)
-  if (params.thought_number === 1 && !params.user_request) {
-    return {
-      status: 'ERROR',
-      message: "Missing required parameter 'user_request' for the first thought.",
-    };
-  }
-
-  // Placeholder response - replace with actual logic
-  return {
-    status: 'ERROR',
-    message: 'Tool logic not implemented.',
-    details: params, // Echo params for debugging during development
-  };
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("[occams-razor-mcp] Server running on stdio");
+  // Keep alive indefinitely until SIGINT/SIGTERM
+  await new Promise(() => {});
 }
 
-// --- Basic MCP Server Structure (stdin/stdout) ---
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false, // Important for reading line-by-line from stdin
+main().catch((error) => {
+  console.error('[occams-razor-mcp] Fatal error:', error);
+  process.exit(1);
 });
 
-rl.on('line', async (line) => {
-  let request: any;
-  try {
-    // Attempt to parse the line as JSON
-    request = JSON.parse(line);
-
-    // --- Handle Standard MCP Initialize Request ---
-    if (request && typeof request === 'object' && request.method === 'initialize' && request.id !== undefined) {
-        const initializeResponse = {
-            jsonrpc: "2.0",
-            id: request.id, // Echo the request ID
-            result: {
-                // Add required fields according to MCP spec
-                protocolVersion: "1.0", // Specify the protocol version
-                serverInfo: {
-                    name: "occams-razor-mcp",
-                    version: process.env.npm_package_version || "0.1.7", // Read from package.json
-                    // Add other optional server info if desired
-                },
-                capabilities: {
-                    // Tools should be an object mapping name to definition
-                    tools: {
-                        "occams_razor_thinking": { // Use tool name as the key
-                            name: "occams_razor_thinking",
-                            description: "Guides systematic problem-solving for coding tasks using Occam's Razor. Breaks down problems into sequential steps (Context, Outcome, Explore, Evaluate, Implement) prioritizing simplicity. Call this tool sequentially, providing your 'thought' (reasoning/output) for the current step.",
-                            // TODO: Ideally, generate this schema dynamically from Zod
-                            inputSchema: {
-                                type: "object",
-                                properties: {
-                                    thought: { type: "string", description: "Detailed thinking/analysis for the current stage." },
-                                    thought_number: { type: "integer", description: "Sequential number of the thought (starts at 1)." },
-                                    thinking_stage: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation", "reporting_issue"], description: "The current stage." },
-                                    next_thought_needed: { type: "boolean", description: "`true` to continue, `false` to terminate." },
-                                    user_request: { type: "string", description: "The original user request (required on first call)." },
-                                    needs_clarification: { type: "boolean", description: "Set to `true` if user input is needed." },
-                                    clarification_questions: { type: "array", items: { type: "string" }, description: "Questions for the user if `needs_clarification` is true." },
-                                    user_clarification: { type: "string", description: "User's response to previous clarification request." },
-                                    requested_stage_override: { type: "string", enum: ["context_analysis", "outcome_definition", "solution_exploration", "simplicity_evaluation", "implementation"], description: "Target stage for loopback." },
-                                    issue_description: { type: "string", description: "Summary if task is blocked/infeasible." }
-                                },
-                                required: ["thought", "thought_number", "thinking_stage", "next_thought_needed"]
-                            }
-                        }
-                    },
-                    // Resources should be an object
-                    resources: {} // No resources defined, use empty object
-                }
-            }
-        };
-        process.stdout.write(JSON.stringify(initializeResponse) + '\n');
-
-    // --- Handle Occams Razor Tool Request ---
-    } else if (
-        request &&
-        typeof request === 'object' &&
-        request.tool_name === 'occams_razor_thinking' && // Check for tool_name for tool calls
-        request.arguments &&
-        typeof request.arguments === 'object'
-    ) {
-        // Only process if it matches the expected tool request structure
-        let response: OccamsRazorThinkingResponse | ErrorResponse;
-        try {
-            // Now call the handler which contains the Zod validation via determineNextStep
-            response = await handleOccamsRazorThinking(request.arguments as OccamsRazorThinkingParams);
-            process.stdout.write(JSON.stringify(response) + '\n');
-        } catch (handlerError: any) {
-            // Handle errors specifically from the handler/validation
-            const errorResponse: ErrorResponse = {
-                status: 'ERROR',
-                message: `Error processing tool request: ${handlerError.message || 'Unknown handler error.'}`,
-                details: handlerError.stack,
-            };
-            // Note: For tool call errors, MCP expects a specific JSON-RPC error format.
-            // This basic error response might need refinement for full compliance.
-            process.stdout.write(JSON.stringify(errorResponse) + '\n');
-        }
-    } else {
-        // It's valid JSON, but not initialize or the tool request we handle.
-        // Ignore other methods (like shutdown, exit) or notifications.
-        // console.error(`Ignoring message: ${line.substring(0, 100)}...`);
-    }
-  } catch (parseError: any) {
-    // Handle JSON parsing errors specifically
-    if (line.trim() !== '') { // Ignore empty lines
-       // Don't send an error response for invalid JSON.
-       // console.error(`Failed to parse incoming line as JSON: ${parseError.message}. Line: ${line.substring(0, 100)}...`);
-    }
-  }
-});
-
-rl.on('close', () => {
-  // This event fires when the input stream (stdin) ends.
-  console.error('Readline interface closed (stdin likely ended). Server may exit if no other async operations are pending.');
-  // We don't explicitly exit here, allowing Node to exit naturally if appropriate.
-});
-
-// Handle process exit signals gracefully if needed
-process.on('SIGINT', () => {
-  console.error('Received SIGINT. Exiting.');
+// --- Graceful Shutdown ---
+process.on('SIGINT', async () => {
+  console.error('[occams-razor-mcp] SIGINT received, shutting down...');
+  await server.close();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-  console.error('Received SIGTERM. Exiting.');
+process.on('SIGTERM', async () => {
+  console.error('[occams-razor-mcp] SIGTERM received, shutting down...');
+  await server.close();
   process.exit(0);
 });
-
-console.error('Occam\'s Razor MCP Server ready. Listening on stdin...'); // Log to stderr

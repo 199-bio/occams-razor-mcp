@@ -91,7 +91,7 @@ export function determineNextStep(
     const response: ClarificationNeededResponse = {
       status: 'CLARIFICATION_NEEDED',
       action: 'clarification_needed',
-      questions_for_user: clarification_questions,
+      clarification_questions: clarification_questions, // Corrected property name
       thought_number: thought_number,
     };
     return response;

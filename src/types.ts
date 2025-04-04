@@ -48,6 +48,25 @@ export interface OccamsRazorThinkingParams {
   issue_description?: string;
 }
 
+// --- Zod Schema for Input Validation ---
+import { z } from 'zod';
+
+export const OccamsRazorThinkingParamsSchema = z.object({
+  thought: z.string().min(1, 'Thought cannot be empty.'),
+  thought_number: z.number().int().positive('Thought number must be a positive integer.'),
+  thinking_stage: z.nativeEnum(ThinkingStage), // Use nativeEnum for TS enums
+  next_thought_needed: z.boolean(),
+  user_request: z.string().optional(), // Required only on first call, handled in logic
+  needs_clarification: z.boolean().optional(),
+  clarification_questions: z.array(z.string()).optional(),
+  user_clarification: z.string().optional(),
+  requested_stage_override: z.nativeEnum(RequestedStageOverride).optional(), // Use nativeEnum
+  issue_description: z.string().optional(),
+});
+
+// Infer the TypeScript type from the Zod schema (optional but good practice)
+export type OccamsRazorThinkingParamsZod = z.infer<typeof OccamsRazorThinkingParamsSchema>;
+
 // --- Response Types ---
 
 /** Base structure for successful responses */
@@ -68,7 +87,7 @@ export interface NextThoughtResponse extends BaseSuccessResponse {
 export interface ClarificationNeededResponse extends BaseSuccessResponse {
   status: 'CLARIFICATION_NEEDED';
   action: 'clarification_needed';
-  questions_for_user: string[];
+  clarification_questions: string[]; // Corrected property name
 }
 
 /** Response when the process is completed successfully */
@@ -86,12 +105,22 @@ export interface BlockedResponse extends BaseSuccessResponse {
   final_thought: string; // Echoes the detailed thought explaining the block
 }
 
+/** Response when a loopback request is accepted */
+export interface LoopbackAcceptedResponse extends BaseSuccessResponse {
+  status: 'LOOPBACK_ACCEPTED';
+  action: 'loopback_accepted';
+  next_stage: ThinkingStage; // The stage being looped back to
+  prompt: string; // Specific prompt for the loopback stage
+  next_thought_number: number; // The number for the *next* thought
+}
+
 /** Union type for all possible successful responses from the tool */
 export type OccamsRazorThinkingResponse =
   | NextThoughtResponse
   | ClarificationNeededResponse
   | CompletedResponse
-  | BlockedResponse;
+  | BlockedResponse
+  | LoopbackAcceptedResponse; // Added Loopback response
 
 /** Structure for error responses */
 export interface ErrorResponse {
