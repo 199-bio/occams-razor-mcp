@@ -105,6 +105,12 @@ rl.on('line', async (line) => {
   }
 });
 
+rl.on('close', () => {
+  // This event fires when the input stream (stdin) ends.
+  console.error('Readline interface closed (stdin likely ended). Server may exit if no other async operations are pending.');
+  // We don't explicitly exit here, allowing Node to exit naturally if appropriate.
+});
+
 // Handle process exit signals gracefully if needed
 process.on('SIGINT', () => {
   console.error('Received SIGINT. Exiting.');
