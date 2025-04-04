@@ -1,6 +1,6 @@
 {
   "name": "occams-razor-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "MCP Server implementing the Occam's Razor Thinking Tool for guided LLM reasoning.",
   "main": "./dist/server.js",
   "type": "module",

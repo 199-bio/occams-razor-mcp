@@ -74,9 +74,17 @@ rl.on('line', async (line) => {
             jsonrpc: "2.0",
             id: request.id, // Echo the request ID
             result: {
+                // Add required fields according to MCP spec
+                protocolVersion: "1.0", // Specify the protocol version
+                serverInfo: {
+                    name: "occams-razor-mcp",
+                    version: process.env.npm_package_version || "0.1.7", // Read from package.json
+                    // Add other optional server info if desired
+                },
                 capabilities: {
-                    tools: [
-                        {
+                    // Tools should be an object mapping name to definition
+                    tools: {
+                        "occams_razor_thinking": { // Use tool name as the key
                             name: "occams_razor_thinking",
                             description: "Guides systematic problem-solving for coding tasks using Occam's Razor. Breaks down problems into sequential steps (Context, Outcome, Explore, Evaluate, Implement) prioritizing simplicity. Call this tool sequentially, providing your 'thought' (reasoning/output) for the current step.",
                             // TODO: Ideally, generate this schema dynamically from Zod
@@ -97,8 +105,9 @@ rl.on('line', async (line) => {
                                 required: ["thought", "thought_number", "thinking_stage", "next_thought_needed"]
                             }
                         }
-                    ],
-                    resources: [] // No resources defined
+                    },
+                    // Resources should be an object
+                    resources: {} // No resources defined, use empty object
                 }
             }
         };
